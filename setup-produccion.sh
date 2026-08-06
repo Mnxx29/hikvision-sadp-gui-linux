@@ -97,32 +97,36 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "Paso 4: Configurando permisos de red automatizados..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 SUDOERS_FILE="/etc/sudoers.d/sadp-gui-routing"
-echo "ALL ALL=(root) NOPASSWD: /usr/sbin/ip route add 239.255.255.250/32 *, /usr/sbin/ip route change 239.255.255.250/32 *, /bin/ip route add 239.255.255.250/32 *, /bin/ip route change 239.255.255.250/32 *, /usr/sbin/ufw allow in on *" | sudo tee "$SUDOERS_FILE" >/dev/null
+echo "ALL ALL=(root) NOPASSWD: /usr/sbin/ip route add 239.255.255.250/32 *, /usr/sbin/ip route change 239.255.255.250/32 *, /bin/ip route add 239.255.255.250/32 *, /bin/ip route change 239.255.255.250/32 *, /usr/sbin/ufw allow in on *, /sbin/sysctl *, /usr/sbin/sysctl *" | sudo tee "$SUDOERS_FILE" >/dev/null
 sudo chmod 0440 "$SUDOERS_FILE"
 echo "✅ Permisos silenciosos configurados"
 echo ""
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Paso 5: Crear Lanzador Inteligente
+# Paso 5: Crear Lanzador Inteligente Multi-Interfaz
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Paso 5: Creando lanzador inteligente..."
+echo "Paso 5: Creando lanzador inteligente multi-interfaz..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 LAUNCHER="$HOME/.local/bin/sadp-gui"
 
 cat > "$LAUNCHER" << 'LAUNCHER_EOF'
 #!/bin/bash
-# 1. Detectar cable de red activo
-ETH_IFACE=$(ip link show | grep -E "^[0-9]+: (en|eth)" | grep "state UP" | awk -F': ' '{print $2}' | head -n 1)
+# 1. Configurar rp_filter=2 (modo laxo) para permitir recibir respuestas UDP de subredes distintas
+sudo sysctl -w net.ipv4.conf.all.rp_filter=2 >/dev/null 2>&1 || true
+sudo sysctl -w net.ipv4.conf.default.rp_filter=2 >/dev/null 2>&1 || true
 
-if [ ! -z "$ETH_IFACE" ]; then
-    # 2. Forzar ruta multicast por el cable
-    sudo ip route add 239.255.255.250/32 dev $ETH_IFACE 2>/dev/null || \
-    sudo ip route change 239.255.255.250/32 dev $ETH_IFACE 2>/dev/null
+# 2. Detectar TODAS las interfaces de red activas (Ethernet, WiFi, USB, VLANs, etc.)
+IFACES=$(ip -o link show | awk -F': ' '$2 !~ /^lo/ && $3 ~ /state (UP|UNKNOWN)/ {print $2}' | cut -d'@' -f1)
+
+# 3. Forzar ruta multicast y abrir firewall en CADA interfaz activa
+for IFACE in $IFACES; do
+    [ -z "$IFACE" ] && continue
+    sudo ip route add 239.255.255.250/32 dev "$IFACE" 2>/dev/null || \
+    sudo ip route change 239.255.255.250/32 dev "$IFACE" 2>/dev/null || true
     
-    # 3. Decirle al firewall que confíe en todas las respuestas que vengan por ese cable
-    sudo ufw allow in on $ETH_IFACE 2>/dev/null
-fi
+    sudo ufw allow in on "$IFACE" to any port 37020 proto udp 2>/dev/null || true
+done
 
 # 4. Iniciar GUI
 cd "$HOME/.local/bin/sadp"

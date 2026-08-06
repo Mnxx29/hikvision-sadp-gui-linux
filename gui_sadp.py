@@ -8,7 +8,7 @@ import shutil
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QMessageBox, QLabel, QProgressBar,
-                             QFrame, QScrollArea, QCheckBox, QLineEdit)
+                             QFrame, QScrollArea, QCheckBox, QLineEdit, QFileDialog)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSettings
 from PyQt6.QtGui import QFont
 
@@ -34,6 +34,23 @@ class ScanThread(QThread):
     
     def run(self):
         try:
+            # 0. En sistemas Linux, aplicar sysctl para rp_filter (permitir subredes distintas)
+            # y habilitar la ruta multicast en TODAS las interfaces de red activas
+            if sys.platform.startswith('linux'):
+                try:
+                    cmd_prep = (
+                        "sudo sysctl -w net.ipv4.conf.all.rp_filter=2 >/dev/null 2>&1 || true; "
+                        "sudo sysctl -w net.ipv4.conf.default.rp_filter=2 >/dev/null 2>&1 || true; "
+                        "for iface in $(ip -o link show | awk -F': ' '$2 !~ /^lo/ && $3 ~ /state (UP|UNKNOWN)/ {print $2}' | cut -d'@' -f1); do "
+                        "  [ -z \"$iface\" ] && continue; "
+                        "  sudo ip route add 239.255.255.250/32 dev \"$iface\" 2>/dev/null || "
+                        "  sudo ip route change 239.255.255.250/32 dev \"$iface\" 2>/dev/null || true; "
+                        "done"
+                    )
+                    subprocess.run(cmd_prep, shell=True, timeout=5)
+                except Exception as prep_err:
+                    print(f"[DEBUG ScanThread] Aviso preparando interfaces: {prep_err}")
+
             # Obtener la ruta del directorio donde está este script
             script_dir = os.path.dirname(os.path.abspath(__file__))
             
@@ -874,14 +891,22 @@ class SADPGui(QMainWindow):
             return
         
         try:
-            filename = "dispositivos_hikvision.csv"
+            filename, _ = QFileDialog.getSaveFileName(
+                self,
+                "Exportar lista de dispositivos Hikvision",
+                "dispositivos_hikvision.csv",
+                "Archivos CSV (*.csv);;Todos los archivos (*)"
+            )
+            if not filename:
+                return
+
             with open(filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=['ip', 'mac', 'tipo', 'estado', 'puerto', 'serial', 'version'])
                 writer.writeheader()
                 writer.writerows(self.dispositivos)
             
-            QMessageBox.information(self, "Éxito", f"Datos exportados a '{filename}'")
-            self.status_label.setText(f"Exportado: {filename}")
+            QMessageBox.information(self, "Éxito", f"Datos exportados exitosamente a:\n'{filename}'")
+            self.status_label.setText(f"Exportado: {os.path.basename(filename)}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al exportar: {str(e)}")
 
