@@ -1,6 +1,6 @@
 # SADP GUI para Linux - Descubridor de Cámaras Hikvision
 
-Aplicación gráfica nativa para Linux que descubre y lista cámaras IP Hikvision en la red local.
+Aplicación gráfica nativa para Linux que descubre y lista cámaras IP y equipos Hikvision en la red local.
 
 ## 🚀 Instalación rápida
 
@@ -14,16 +14,19 @@ sadp-gui
 
 ## 📋 Requisitos
 
-- Ubuntu 20.04 LTS o superior
+- Ubuntu 20.04 LTS o superior (Debian y derivados compatibles)
 - Acceso a la red donde estén las cámaras Hikvision
 
 ## ✨ Características principales
 
-- Descubrimiento automático de dispositivos (multicast SADP)
-- Tabla interactiva con IP, MAC, modelo, firmware
-- Doble clic para abrir la interfaz web de la cámara
-- Exportar datos a CSV
-- Configuración automática del firewall para permitir multicast
+- **Descubrimiento automático de dispositivos**: Escaneo multicast SADP en toda la red.
+- **Soporte fuera de subred**: Detecta cámaras independientemente de si están en un rango de IP distinto al del equipo.
+- **Escaneo multi-interfaz**: Soporta múltiples tarjetas de red, WiFi, radioenlaces, adaptadores USB y VLANs.
+- **Traducción de tipo de equipo**: Muestra categorías comprensibles en español (`Cámara IP`, `Cámara PTZ`, `NVR`, `DVR`, `Videoportero`, etc.).
+- **Tabla interactiva**: Ordenamiento avanzado y filtro de búsqueda en tiempo real.
+- **Acceso web directo**: Doble clic sobre la IP para abrir la interfaz web del dispositivo en el navegador.
+- **Exportar datos a CSV**: Guarda la lista detectada eligiendo ruta de destino.
+- **Configuración automática**: Ajuste de firewall (`ufw`) y capacidades de red (`setcap`) automáticas.
 
 ## 🖥️ Integración como aplicación
 
@@ -31,9 +34,7 @@ El instalador crea un lanzador de usuario en `~/.local/share/applications/sadp-g
 
 ## 📚 Documentación
 
-- [Instalación](docs/INSTALACION.md)
-- [Cómo usar](docs/USO.md)
-- [Solución de problemas](docs/TROUBLESHOOTING.md)
+- [Guía Completa de Uso e Instalación](docs/GUIA.md)
 
 ## 📄 Licencia
 
