@@ -26,6 +26,64 @@ class SortableItem(QTableWidgetItem):
         except Exception:
             return super().__lt__(other)
 
+def traducir_tipo_dispositivo(tipo_code: str, serial_model: str = "") -> str:
+    """Traduce códigos numéricos SADP y prefijos de modelo Hikvision a nombres comprensibles en español."""
+    tipo_str = str(tipo_code).strip()
+    model_upper = str(serial_model).upper()
+    
+    # 1. Mapa de códigos numéricos Hikvision SADP conocidos
+    MAPA_CODIGOS = {
+        # Cámaras IP (DS-2CD...)
+        "141938": "Cámara IP",
+        "147479": "Cámara IP",
+        "141904": "Cámara IP",
+        "141937": "Cámara IP",
+        "141939": "Cámara IP",
+        "141950": "Cámara IP",
+        "147456": "Cámara IP",
+        # Cámaras PTZ / Speed Dome (DS-2SE, DS-2DE...)
+        "196607": "Cámara PTZ",
+        "196608": "Cámara PTZ",
+        "196609": "Cámara PTZ",
+        # NVR (DS-96, DS-76...)
+        "46877": "NVR",
+        "46848": "NVR",
+        "46849": "NVR",
+        "46876": "NVR",
+        "46878": "NVR",
+        # DVR (DS-72, DS-71...)
+        "42240": "DVR",
+        "42241": "DVR",
+        "42242": "DVR",
+        # Videoporteros / Control de Acceso
+        "262144": "Videoportero",
+        "262145": "Videoportero",
+        # Switches PoE
+        "393216": "Switch PoE",
+    }
+    
+    if tipo_str in MAPA_CODIGOS:
+        return f"{MAPA_CODIGOS[tipo_str]} ({tipo_str})"
+        
+    # 2. Inferencia inteligente por prefijo de modelo/serial
+    if "DS-2SE" in model_upper or "DS-2DE" in model_upper or "DS-2DF" in model_upper or "PTZ" in model_upper:
+        return f"Cámara PTZ ({tipo_str})" if tipo_str.isdigit() else "Cámara PTZ"
+    elif "DS-2CD" in model_upper or "DS-2CV" in model_upper or "IPC" in model_upper:
+        return f"Cámara IP ({tipo_str})" if tipo_str.isdigit() else "Cámara IP"
+    elif "DS-96" in model_upper or "DS-76" in model_upper or "DS-77" in model_upper or "NVR" in model_upper:
+        return f"NVR ({tipo_str})" if tipo_str.isdigit() else "NVR"
+    elif "DS-71" in model_upper or "DS-72" in model_upper or "DS-73" in model_upper or "DVR" in model_upper:
+        return f"DVR ({tipo_str})" if tipo_str.isdigit() else "DVR"
+    elif "DS-KD" in model_upper or "DS-KV" in model_upper or "DS-KH" in model_upper:
+        return f"Videoportero ({tipo_str})" if tipo_str.isdigit() else "Videoportero"
+    elif "DS-3E" in model_upper:
+        return f"Switch PoE ({tipo_str})" if tipo_str.isdigit() else "Switch PoE"
+
+    # Si es numérico sin mapeo específico
+    if tipo_str.isdigit():
+        return f"Dispositivo ({tipo_str})"
+    return tipo_str if tipo_str else "N/A"
+
 class ScanThread(QThread):
     """Thread para ejecutar el escaneo sin congelar la interfaz"""
     finished = pyqtSignal()
@@ -663,7 +721,9 @@ class SADPGui(QMainWindow):
             self.tabla.setItem(row_position, 2, SortableItem(mac_text, sort_key=mac_key))
 
             # Tipo (columna 3)
-            tipo_text = disp.get('tipo', '')
+            tipo_raw = disp.get('tipo', '')
+            serial_raw = disp.get('serial', '')
+            tipo_text = traducir_tipo_dispositivo(tipo_raw, serial_raw)
             self.tabla.setItem(row_position, 3, SortableItem(tipo_text, sort_key=tipo_text))
 
             # Estado (columna 4)
