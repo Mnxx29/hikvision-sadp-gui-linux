@@ -50,24 +50,34 @@ bash clean-install.sh
 
 1. **Escaneo y Refresco ("Refresh")**:
    - Presiona **Refresh** para iniciar el escaneo de red.
-   - El escaneo consulta automáticamente todas las interfaces físicas y inalámbricas activas en la máquina (Ethernet, WiFi, antenas, USB, VLANs).
-2. **Filtrado en Tiempo Real ("Filter")**:
+   - El escaneo consulta automáticamente todas las interfaces físicas e inalámbricas activas en la máquina (Ethernet, WiFi, antenas, USB, VLANs).
+2. **Modificación de Parámetros de Red ("Modificar Red")**:
+   - Haz clic sobre un dispositivo de la lista para seleccionarlo y abrir el panel **Modify Network Parameters**.
+   - **Cambiar IP y Gateway**: Modifica la dirección IP, Máscara de subred, Gateway o Puerto SDK/HTTP según las necesidades del nuevo sitio.
+   - **Soporte fuera de subred**: Puedes cambiar la IP de cámaras traídas de otros centros aunque estén en un rango de IP/subred completamente distinto al de tu computador, sin necesidad de entrar a la interfaz web ni cambiar la IP de tu PC.
+   - **Verificación de Seguridad**: Introduce la contraseña del usuario administrador del dispositivo (`admin`) en el campo **Administrator Password** y haz clic en **Modify**.
+   - Al confirmarse el cambio, la aplicación notificará el éxito y refrescará la lista automáticamente mostrando el nuevo rango de IP.
+3. **Desvincular Dispositivo ("Unbind")**:
+   - Para liberar cámaras vinculadas a cuentas Hik-Connect / Ezviz en otros centros, selecciona el equipo, ingresa la contraseña de administrador y presiona **Unbind**.
+4. **Filtrado en Tiempo Real ("Filter")**:
    - Escribe en el cuadro de búsqueda para filtrar al instante por IP, MAC, Modelo, Estado, Número de Serie o Versión de Firmware.
-3. **Traducción Inteligente de Tipos de Dispositivo**:
+5. **Traducción Inteligente de Tipos de Dispositivo**:
    - Muestra el tipo de equipo de forma clara en español: `Cámara IP`, `Cámara PTZ`, `NVR`, `DVR`, `Videoportero` o `Switch PoE`.
-4. **Abrir Interfaz Web de la Cámara**:
+6. **Abrir Interfaz Web de la Cámara**:
    - Haz **doble clic sobre la Dirección IP** de un registro para abrir su panel web de administración (`http://<IP>`) directamente en el navegador por defecto.
-5. **Exportación a CSV ("Export")**:
-   - Haz clic en **Export** para guardar la lista de dispositivos detectados en un archivo `.csv`. Un cuadro de diálogo te permitirá elegir el nombre y directorio de destino.
+7. **Exportación a CSV ("Export")**:
+   - Haz clic en **Export** para guardar la lista de dispositivos detectados en un archivo `.csv`.
 
 ---
 
 ## 🌐 Funcionamiento Técnico de Red (Fuera de Subred y Multi-Interfaz)
 
-SADP (Search Active Devices Protocol) utiliza paquetes **UDP Multicast** a la dirección `239.255.255.250:37020`.
+SADP (Search Active Devices Protocol) utiliza paquetes **UDP Multicast** a la dirección `239.255.255.250:37020` y difusión broadcast `255.255.255.255:37020`.
 
-- **Cámaras fuera de rango de IP**: Las cámaras Hikvision responden a nivel de Capa 2 (difusión por MAC) independientemente de si su dirección IP coincide con la subred del computador. Para evitar que el Kernel de Linux bloquee estas respuestas, el instalador configura `net.ipv4.conf.all.rp_filter=2` (Loose Mode).
-- **Múltiples Tarjetas de Red / Antenas**: El lanzador `sadp-gui` y la app habilitan rutas multicast en **todas las interfaces de red activas** (`state UP`), permitiendo encontrar cámaras en entornos con múltiples subredes o radioenlaces.
+- **Modificación y Descubrimiento fuera de subred**: Las cámaras Hikvision responden y procesan órdenes SADP a nivel de Capa 2 (asociadas a la dirección MAC del dispositivo), independientemente de si la IP asignada coincide o no con la subred de la computadora.
+- **Protocolo SADP Update**: Al modificar parámetros de red, la app envía un paquete de control SADP (`update`) firmado con la contraseña de administrador y referenciado a la MAC del equipo objetivo.
+- **Configuración de Kernel (rp_filter)**: Para evitar que el Kernel de Linux bloquee respuestas de equipos en subredes distintas, el instalador configura `net.ipv4.conf.all.rp_filter=2` (Loose Mode).
+- **Múltiples Tarjetas de Red / Antenas**: El lanzador `sadp-gui` y la app habilitan rutas multicast en **todas las interfaces de red activas** (`state UP`), permitiendo encontrar y configurar cámaras en entornos con múltiples subredes o radioenlaces.
 
 ---
 
