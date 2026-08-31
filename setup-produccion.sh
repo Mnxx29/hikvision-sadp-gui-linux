@@ -29,7 +29,12 @@ echo ""
 configure_ufw() {
     echo "🔐 Configurando firewall base..."
     if command -v ufw &> /dev/null; then
+        # Permitir tráfico SADP entrante al puerto 37020
         sudo ufw allow 37020/udp 2>/dev/null
+        # Permitir respuestas SADP: los dispositivos Hikvision responden DESDE el puerto 37020
+        # hacia el puerto fuente del cliente. Sin esta regla, UFW bloquea las respuestas.
+        sudo ufw allow from any port 37020 proto udp 2>/dev/null
+        # Permitir envío multicast saliente
         sudo ufw allow out proto udp to 224.0.0.0/4 2>/dev/null
         if ! sudo ufw status | grep -q "Status: active"; then
             sudo ufw --force enable 2>/dev/null
@@ -134,7 +139,10 @@ for IFACE in $IFACES; do
     sudo ufw allow in on "$IFACE" to any port 37020 proto udp 2>/dev/null || true
 done
 
-# 4. Iniciar GUI
+# 4. Garantizar que las respuestas SADP no sean bloqueadas por UFW
+sudo ufw allow from any port 37020 proto udp 2>/dev/null || true
+
+# 5. Iniciar GUI
 cd "$HOME/.local/bin/sadp"
 python3 gui_sadp.py
 LAUNCHER_EOF
