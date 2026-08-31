@@ -236,9 +236,35 @@ class ScanThread(QThread):
                 except Exception as prep_err:
                     print(f"[DEBUG ScanThread] Aviso preparando interfaces: {prep_err}")
 
+            # ── MÉTODO PRIMARIO: Descubrimiento nativo Python (no depende del binario Go) ──
+            dispositivos = []
+            try:
+                # Importar el módulo de descubrimiento nativo
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                if script_dir not in sys.path:
+                    sys.path.insert(0, script_dir)
+                from sadp_discover import discover as sadp_discover_native
+                
+                print("[DEBUG ScanThread] Usando descubrimiento SADP nativo (Python)")
+                dispositivos = sadp_discover_native(timeout=12, debug=False)
+                
+                if dispositivos:
+                    print(f"[DEBUG ScanThread] Descubrimiento nativo encontró {len(dispositivos)} dispositivo(s)")
+                    self.devices.emit(dispositivos)
+                    self.finished.emit()
+                    return
+                else:
+                    print("[DEBUG ScanThread] Descubrimiento nativo: 0 dispositivos, intentando binario Go...")
+            except ImportError:
+                print("[DEBUG ScanThread] Módulo sadp_discover.py no disponible, usando binario Go")
+            except Exception as native_err:
+                print(f"[DEBUG ScanThread] Error en descubrimiento nativo: {native_err}, fallback a binario Go")
+
+            # ── FALLBACK: Binario Go (sadp-linux-amd64) ──
             binario_path = obtener_binario_path()
             if not binario_path:
-                self.error.emit("No se encontró el binario SADP.\n\nAsegúrate de que el archivo 'sadp-linux-amd64' esté en el mismo directorio que gui_sadp.py o instalado en ~/.local/bin/sadp/")
+                if not dispositivos:
+                    self.error.emit("No se encontró el binario SADP ni el módulo de descubrimiento nativo.\n\nAsegúrate de que 'sadp_discover.py' o 'sadp-linux-amd64' estén en el mismo directorio que gui_sadp.py o instalado en ~/.local/bin/sadp/")
                 self.finished.emit()
                 return
             
@@ -251,7 +277,6 @@ class ScanThread(QThread):
                 check=False
             )
             
-            dispositivos = []
             if resultado_csv.returncode == 0 and "IPv4Address" in resultado_csv.stdout:
                 try:
                     reader = csv.DictReader(io.StringIO(resultado_csv.stdout))

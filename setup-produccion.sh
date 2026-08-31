@@ -83,7 +83,13 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 if [[ -f "$SCRIPT_DIR/gui_sadp.py" ]]; then
     cp "$SCRIPT_DIR/gui_sadp.py" "$INSTALL_DIR/"
     chmod +x "$INSTALL_DIR/gui_sadp.py"
-    echo "✅ GUI instalada"
+    # Copiar módulo de descubrimiento nativo Python (reemplaza al binario Go para discover)
+    if [[ -f "$SCRIPT_DIR/sadp_discover.py" ]]; then
+        cp "$SCRIPT_DIR/sadp_discover.py" "$INSTALL_DIR/"
+        echo "✅ GUI y módulo de descubrimiento nativo instalados"
+    else
+        echo "✅ GUI instalada (sin módulo nativo sadp_discover.py)"
+    fi
 else
     echo "❌ No se pudo encontrar gui_sadp.py"
     exit 1
