@@ -1,49 +1,47 @@
-# SADP GUI para Linux - Descubridor de Cámaras Hikvision
+# SADP GUI para Linux
 
-Aplicación gráfica nativa para Linux que descubre y lista cámaras IP y equipos Hikvision en la red local.
+Aplicación gráfica nativa para Linux para el descubrimiento, diagnóstico y gestión de red de cámaras IP y dispositivos Hikvision en redes locales y subredes múltiples.
 
-## 🚀 Instalación rápida
+## Instalación
 
 ```bash
-# Ejecuta SIN sudo (el instalador pedirá sudo cuando sea necesario)
 bash setup-produccion.sh
+```
 
-# Después de la instalación abre la app desde el menú de Ubuntu o con:
+Ejecutar sin `sudo`. El instalador solicitará privilegios de superusuario únicamente cuando sea necesario para la configuración de red y dependencias.
+
+Para ejecutar la aplicación después de instalar:
+
+```bash
 sadp-gui
 ```
 
-## 📋 Requisitos
+## Requisitos del sistema
 
-- Ubuntu 20.04 LTS o superior (Debian y derivados compatibles)
-- Acceso a la red donde estén las cámaras Hikvision
+- Ubuntu 20.04 LTS o superior (o distribuciones basadas en Debian/Ubuntu).
+- Python 3.8+ con `PyQt6`.
+- Go (requerido para la compilación del binario auxiliar de modificaciones de red).
+- Interfaz de red activa conectada al segmento o VLAN de los dispositivos.
 
-## ✨ Características principales
+## Arquitectura y características técnicas
 
-- **Descubrimiento automático de dispositivos**: Escaneo multicast SADP en toda la red.
-- **Soporte fuera de subred**: Detecta cámaras independientemente de si están en un rango de IP distinto al del equipo.
-- **Escaneo multi-interfaz**: Soporta múltiples tarjetas de red, WiFi, radioenlaces, adaptadores USB y VLANs.
-- **Traducción de tipo de equipo**: Muestra categorías comprensibles en español (`Cámara IP`, `Cámara PTZ`, `NVR`, `DVR`, `Videoportero`, etc.).
-- **Tabla interactiva**: Ordenamiento avanzado y filtro de búsqueda en tiempo real.
-- **Acceso web directo**: Doble clic sobre la IP para abrir la interfaz web del dispositivo en el navegador.
-- **Exportar datos a CSV**: Guarda la lista detectada eligiendo ruta de destino.
-- **Configuración automática**: Ajuste de firewall (`ufw`) y capacidades de red (`setcap`) automáticas.
+- **Motor de descubrimiento nativo (Python)**: Implementación directa del protocolo SADP vía UDP multicast (`239.255.255.250:37020`) y broadcast, enlazada directamente al puerto 37020 para garantizar la recepción de respuestas a través de reglas de firewall.
+- **Soporte multi-interfaz y VLAN**: Envío de sondas en todas las interfaces de red activas de forma simultánea.
+- **Soporte fuera de subred**: Detección de dispositivos sin importar si se encuentran en un segmento IP distinto al del equipo local, mediante configuración del kernel (`rp_filter=2`).
+- **Modificación de parámetros de red**: Cambio de IP, máscara de subred, puerta de enlace, puertos HTTP/SDK y DHCP mediante firma de contraseña de administrador.
+- **Desvinculación Hik-Connect (Unbind)**: Liberación de equipos asociados a cuentas de usuario mediante comandos de control SADP.
+- **Traducción de tipo de dispositivo**: Identificación de códigos numéricos SADP y prefijos de modelo (`Cámara IP`, `Cámara PTZ`, `NVR`, `DVR`, `Videoportero`, `Switch PoE`).
+- **Exportación CSV completa**: Generación de reportes CSV estructurados con la totalidad de atributos de red detectados (`ip`, `mac`, `tipo`, `estado`, `puerto`, `http_port`, `serial`, `version`, `subnet`, `gateway`, `dhcp`).
+- **Herramienta de diagnóstico integrada**: Script `diagnostico.sh` para auditoría de sockets, reglas UFW, permisos `cap_net_raw`, capturas `tcpdump` y pruebas del protocolo.
 
-## 🖥️ Integración como aplicación
+## Integración con el sistema
 
-El instalador crea un lanzador de usuario en `~/.local/share/applications/sadp-gui.desktop` y un comando `sadp-gui`, por lo que la aplicación aparecerá en el menú de Ubuntu como cualquier otra app de usuario.
+El instalador genera el comando global `sadp-gui` en `~/.local/bin/` y crea el archivo de escritorio `~/.local/share/applications/sadp-gui.desktop` para integración directa en el menú de aplicaciones.
 
-## 📚 Documentación
+## Documentación detallada
 
-- [Guía Completa de Uso e Instalación](docs/GUIA.md)
+Consulte la [Guía Técnica de Uso y Red](GUIA.md) para especificaciones del protocolo, troubleshooting y configuración avanzada.
 
-## 📄 Licencia
+## Licencia
 
-MIT License — ver [LICENSE](LICENSE)
-
-## 👨‍💻 Autor
-
-Mnxx29
-
----
-
-**Nota**: Esta aplicación usa internamente [hikvision-tooling](https://github.com/cameronnewman/hikvision-tooling) para realizar el descubrimiento SADP.
+MIT License — consulte el archivo [LICENSE](LICENSE) para más detalles.

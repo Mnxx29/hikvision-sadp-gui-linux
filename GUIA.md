@@ -1,106 +1,129 @@
-# Guía Completa de SADP GUI para Linux
+# Guía Técnica de SADP GUI para Linux
 
-Esta guía contiene toda la información sobre la instalación, uso, arquitectura de red y solución de problemas de **SADP GUI para Linux**.
-
----
-
-## 📋 Requisitos del Sistema
-
-- **Sistema Operativo**: Ubuntu 20.04 LTS o superior (Debian y derivados compatibles).
-- **Red**: Conexión a la red local donde se encuentren las cámaras o equipos Hikvision (Ethernet, WiFi, radioenlaces, adaptadores USB, etc.).
-- **Dependencias**: Python 3 con `PyQt6` y Go (el script de instalación se encarga de instalarlas automáticamente mediante `apt`).
+Documentación de arquitectura, instalación, operación de red y solución de problemas para **SADP GUI para Linux**.
 
 ---
 
-## 🚀 Instalación y Desinstalación
+## Requisitos del sistema
 
-### Instalación Rápida
-Ejecuta el script instalador desde la carpeta del proyecto **SIN utilizar `sudo`** (el script solicitará permisos cuando sea necesario):
+- **Sistema operativo**: Ubuntu 20.04 LTS o superior (Debian y derivados compatibles).
+- **Entorno de ejecución**: Python 3.8+ con paquete `PyQt6`.
+- **Compilador**: Go 1.16+ (necesario durante la instalación para compilar el módulo ejecutable de comandos de modificación).
+- **Permisos de red**: Capacidad `cap_net_raw` asignada al binario de modificación y acceso a reglas UFW / sysctl.
+
+---
+
+## Instalación y desinstalación
+
+### Instalación en producción
+
+Ejecutar el script de instalación desde el directorio raíz del repositorio sin anteponer `sudo`:
 
 ```bash
 bash setup-produccion.sh
 ```
 
-El instalador realiza lo siguiente automáticamente:
-1. Instala dependencias (`python3-pyqt6`, `golang-go`, `ufw`, `libcap2-bin`).
-2. Compila el binario ejecutable subyacente en Go (`sadp-linux-amd64`).
-3. Le asigna permisos de red `setcap cap_net_raw=ep` al binario para operar sockets sin requerir ser root.
-4. Configura el firewall (`ufw`) en el puerto UDP **37020** y multicast (`224.0.0.0/4`).
-5. Configura el kernel (`rp_filter=2`) para recibir tramas de cámaras en subredes distintas.
-6. Crea el comando `sadp-gui` en `~/.local/bin/` y el acceso directo de escritorio `.desktop` para el menú de Ubuntu.
+El script ejecuta las siguientes tareas:
+1. Instalación de dependencias del sistema (`python3-pyqt6`, `golang-go`, `ufw`, `libcap2-bin`).
+2. Compilación del ejecutable secundario en Go (`sadp-linux-amd64`).
+3. Asignación de la capacidad de red `cap_net_raw=ep` al binario compilado.
+4. Configuración de reglas UFW: puerto de destino `37020/udp`, tráfico de respuesta `from any port 37020 proto udp` y tráfico multicast saliente `224.0.0.0/4`.
+5. Ajuste de parámetros del kernel (`net.ipv4.conf.all.rp_filter=2`) para recepción de respuestas fuera de subred.
+6. Instalación del ejecutable `sadp_discover.py` y configuración del lanzador `sadp-gui` en `~/.local/bin/`.
+7. Creación del acceso directo `.desktop` en `~/.local/share/applications/`.
 
-### Cómo Iniciar la Aplicación
-Una vez instalado, puedes abrir la aplicación de dos formas:
-- Desde el menú de aplicaciones de Ubuntu buscando **"SADP GUI"**.
-- Desde la terminal ejecutando:
+### Ejecución de la aplicación
+
+- Desde la terminal:
   ```bash
   sadp-gui
   ```
+- Desde la interfaz gráfica: Buscar **"SADP GUI"** en el menú de aplicaciones del sistema.
 
-### Desinstalación
-Si deseas eliminar la aplicación del sistema:
+### Desinstalación limpia
+
+Para remover los binarios, lanzadores y accesos directos instalados:
+
 ```bash
 bash clean-install.sh
 ```
-*(O manualmente borrando `~/.local/bin/sadp/`, `~/.local/bin/sadp-gui` y `~/.local/share/applications/sadp-gui.desktop`)*.
 
 ---
 
-## 🖥️ Manual de Uso
+## Manual de operación
 
-1. **Escaneo y Refresco ("Refresh")**:
-   - Presiona **Refresh** para iniciar el escaneo de red.
-   - El escaneo consulta automáticamente todas las interfaces físicas e inalámbricas activas en la máquina (Ethernet, WiFi, antenas, USB, VLANs).
-2. **Modificación de Parámetros de Red ("Modificar Red")**:
-   - Haz clic sobre un dispositivo de la lista para seleccionarlo y abrir el panel **Modify Network Parameters**.
-   - **Cambiar IP y Gateway**: Modifica la dirección IP, Máscara de subred, Gateway o Puerto SDK/HTTP según las necesidades del nuevo sitio.
-   - **Soporte fuera de subred**: Puedes cambiar la IP de cámaras traídas de otros centros aunque estén en un rango de IP/subred completamente distinto al de tu computador, sin necesidad de entrar a la interfaz web ni cambiar la IP de tu PC.
-   - **Verificación de Seguridad**: Introduce la contraseña del usuario administrador del dispositivo (`admin`) en el campo **Administrator Password** y haz clic en **Modify**.
-   - Al confirmarse el cambio, la aplicación notificará el éxito y refrescará la lista automáticamente mostrando el nuevo rango de IP.
-3. **Desvincular Dispositivo ("Unbind")**:
-   - Para liberar cámaras vinculadas a cuentas Hik-Connect / Ezviz en otros centros, selecciona el equipo, ingresa la contraseña de administrador y presiona **Unbind**.
-4. **Filtrado en Tiempo Real ("Filter")**:
-   - Escribe en el cuadro de búsqueda para filtrar al instante por IP, MAC, Modelo, Estado, Número de Serie o Versión de Firmware.
-5. **Traducción Inteligente de Tipos de Dispositivo**:
-   - Muestra el tipo de equipo de forma clara en español: `Cámara IP`, `Cámara PTZ`, `NVR`, `DVR`, `Videoportero` o `Switch PoE`.
-6. **Abrir Interfaz Web de la Cámara**:
-   - Haz **doble clic sobre la Dirección IP** de un registro para abrir su panel web de administración (`http://<IP>`) directamente en el navegador por defecto.
-7. **Exportación a CSV ("Export")**:
-   - Haz clic en **Export** para guardar la lista de dispositivos detectados en un archivo `.csv`.
+### 1. Escaneo y descubrimiento ("Refresh")
+- Al pulsar **Refresh**, el sistema ejecuta el motor nativo `sadp_discover.py`.
+- Se envían sondas XML en paralelo a través de todas las interfaces de red activas en estado `UP` (Ethernet, WiFi, adaptadores USB, VLANs).
+- La tabla actualiza en tiempo real el conteo total de dispositivos detectados.
 
----
+### 2. Modificación de parámetros de red ("Modificar Red")
+- Seleccionar un dispositivo en la tabla para cargar su información en el panel lateral.
+- Habilitar o deshabilitar DHCP según los requerimientos del segmento.
+- Definir Dirección IP, Máscara de subred, Puerta de enlace y Puertos (HTTP / SDK).
+- Ingresar la contraseña del usuario administrador (`admin`) en la sección de verificación de seguridad.
+- Pulsar **Modify**. La aplicación enviará la trama SADP `update` firmada y refrescará el listado al recibir confirmación del equipo.
 
-## 🌐 Funcionamiento Técnico de Red (Fuera de Subred y Multi-Interfaz)
+### 3. Desvinculación de servicios en la nube ("Unbind")
+- Seleccionar el dispositivo objetivo.
+- Ingresar la contraseña de administrador.
+- Pulsar **Unbind** para desvincular el dispositivo de cuentas Hik-Connect o Ezviz asociadas.
 
-SADP (Search Active Devices Protocol) utiliza paquetes **UDP Multicast** a la dirección `239.255.255.250:37020` y difusión broadcast `255.255.255.255:37020`.
+### 4. Filtrado en tiempo real ("Filter")
+- El cuadro de búsqueda filtra instantáneamente por cualquiera de las columnas: IP, MAC, Modelo, Estado, Puerto, Número de Serie o Versión de Firmware.
 
-- **Modificación y Descubrimiento fuera de subred**: Las cámaras Hikvision responden y procesan órdenes SADP a nivel de Capa 2 (asociadas a la dirección MAC del dispositivo), independientemente de si la IP asignada coincide o no con la subred de la computadora.
-- **Protocolo SADP Update**: Al modificar parámetros de red, la app envía un paquete de control SADP (`update`) firmado con la contraseña de administrador y referenciado a la MAC del equipo objetivo.
-- **Configuración de Kernel (rp_filter)**: Para evitar que el Kernel de Linux bloquee respuestas de equipos en subredes distintas, el instalador configura `net.ipv4.conf.all.rp_filter=2` (Loose Mode).
-- **Múltiples Tarjetas de Red / Antenas**: El lanzador `sadp-gui` y la app habilitan rutas multicast en **todas las interfaces de red activas** (`state UP`), permitiendo encontrar y configurar cámaras en entornos con múltiples subredes o radioenlaces.
+### 5. Navegación directa a la interfaz web
+- Hacer doble clic sobre la celda de dirección IP de cualquier dispositivo activo para abrir su interfaz de administración HTTP en el navegador predeterminado.
+
+### 6. Exportación de datos a CSV ("Export")
+- Pulsar **Export** para guardar la lista de dispositivos detectados en formato `.csv`.
+- El archivo generado incluye la totalidad de parámetros técnicos: IP, MAC, Tipo traducido, Estado, Puerto SDK, Puerto HTTP, Número de serie, Versión de firmware, Máscara de subred, Gateway y estado DHCP.
 
 ---
 
-## ❓ Solución de Problemas (Troubleshooting)
+## Arquitectura de red y protocolo SADP
 
-### 1. No se encuentran dispositivos en la red
-- Verifica que el cable de red o enlace de radio esté correctamente conectado y la interfaz esté activa.
-- Comprueba el estado del firewall:
-  ```bash
-  sudo ufw status verbose
-  ```
-  Asegúrate de que el puerto UDP `37020` esté permitido.
+El protocolo SADP (Search Active Devices Protocol) opera mediante tramas UDP multicast hacia la dirección `239.255.255.250:37020` y difusiones broadcast hacia `255.255.255.255:37020`.
 
-### 2. Probar el binario directamente por consola
-Si deseas realizar una prueba directa de bajo nivel en la consola sin la interfaz gráfica:
+### Consideraciones técnicas implementadas
+
+- **Enlace de puerto fijo (37020/udp)**: El motor de descubrimiento se enlaza explícitamente al puerto 37020. Esto asegura que las respuestas enviadas por los dispositivos desde el puerto fuente 37020 coincidan con las reglas de filtrado del firewall UFW.
+- **Filtrado de ruta inversa (rp_filter)**: El kernel de Linux descarta por defecto paquetes entrantes cuyo origen no coincida con la tabla de ruteo de la interfaz de entrada. Se establece `net.ipv4.conf.all.rp_filter=2` (Loose Mode) para permitir la recepción de tramas provenientes de subredes distintas.
+- **Multicast en múltiples interfaces**: Las sondas se transmiten especificando cada interfaz activa mediante `IP_MULTICAST_IF`, evitando que las consultas queden restringidas únicamente a la ruta por defecto del sistema.
+
+---
+
+## Diagnóstico y resolución de problemas
+
+### Ejecución del script de diagnóstico automatizado
+
+El proyecto incluye un script de auditoría de red y sistema que verifica 9 puntos críticos:
+
 ```bash
-~/.local/bin/sadp/sadp-linux-amd64 discover:sadp
+bash diagnostico.sh
 ```
-Esto imprimirá por consola la salida en texto plano de las cámaras encontradas.
 
-### 3. Error de permisos al ejecutar el binario
-Si el binario no puede enviar paquetes raw, asegúrate de reinstalar `libcap2-bin` y asignar capabilities:
+El script evalúa:
+1. Existencia y permisos del binario SADP.
+2. Asignación de la capacidad `cap_net_raw=ep`.
+3. Estado operativo e direcciones IP asignadas a las interfaces de red.
+4. Reglas del firewall UFW y cadenas iptables para UDP 37020.
+5. Valor de `rp_filter` en el kernel para la totalidad de interfaces.
+6. Existencia de rutas para el grupo multicast `239.255.255.250`.
+7. Permisos NOPASSWD en `/etc/sudoers.d/sadp-gui-routing`.
+8. Ejecución directa del motor de descubrimiento por consola.
+9. Inspección de tráfico en tiempo real mediante `tcpdump`.
+
+### Prueba directa del módulo de descubrimiento por consola
+
+Para verificar la detección de equipos fuera de la interfaz gráfica:
+
 ```bash
-sudo apt install -y libcap2-bin
-sudo setcap cap_net_raw=ep ~/.local/bin/sadp/sadp-linux-amd64
+python3 sadp_discover.py --debug --timeout 10
+```
+
+Para inspeccionar la estructura binaria y XML de las respuestas sin parsear:
+
+```bash
+python3 sadp_discover.py --raw --timeout 10
 ```
