@@ -186,6 +186,9 @@ def discover(timeout=10, debug=False):
     Envía sondas UDP multicast (239.255.255.250:37020) y broadcast,
     luego escucha las respuestas XML de los dispositivos.
 
+    IMPORTANTE: Se enlaza al puerto 37020 (el mismo que permite el firewall UFW)
+    para que las respuestas unicast de los dispositivos no sean bloqueadas.
+
     Args:
         timeout: Tiempo máximo de espera en segundos (default: 10).
         debug: Si True, imprime información de depuración.
@@ -197,6 +200,11 @@ def discover(timeout=10, debug=False):
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    # SO_REUSEPORT permite coexistir con otros procesos en el mismo puerto
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    except (AttributeError, OSError):
+        pass
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
     # Buffer grande para manejar respuestas reensambladas (post IP-fragmentation)
@@ -208,14 +216,28 @@ def discover(timeout=10, debug=False):
     # TTL para multicast (4 saltos es suficiente para redes locales/VLANs)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 4)
 
-    # Permitir recibir nuestro propio multicast (no necesario, pero por compatibilidad)
+    # Permitir recibir nuestro propio multicast
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
 
-    # Bind a puerto aleatorio (los dispositivos responden al puerto fuente)
-    sock.bind(('', 0))
-    local_port = sock.getsockname()[1]
+    # ── BIND AL PUERTO 37020 ──
+    # Los dispositivos responden al puerto fuente de la sonda. Si usamos un
+    # puerto aleatorio, el firewall (UFW) bloquea la respuesta porque solo
+    # tiene abierto el 37020/udp. Al enlazar directamente al 37020,
+    # tanto el envío como la recepción pasan por el puerto permitido.
+    bound_port = SADP_PORT
+    try:
+        sock.bind(('', SADP_PORT))
+    except OSError as e:
+        # Si el puerto 37020 está ocupado, usar uno aleatorio e informar
+        if debug:
+            print(f"[SADP] No se pudo enlazar al puerto {SADP_PORT}: {e}")
+            print(f"[SADP] ⚠️  Usando puerto aleatorio. Si el firewall bloquea respuestas,")
+            print(f"[SADP]    ejecuta: sudo ufw allow from any port 37020 to any")
+        sock.bind(('', 0))
+        bound_port = sock.getsockname()[1]
+
     if debug:
-        print(f"[SADP] Socket en puerto {local_port}")
+        print(f"[SADP] Socket enlazado al puerto {bound_port}")
 
     # Unirse al grupo multicast en cada interfaz activa
     iface_ips = get_interface_ips()
@@ -234,21 +256,24 @@ def discover(timeout=10, debug=False):
     # Construir y enviar sonda
     probe = build_probe()
 
-    # Enviar a multicast
-    try:
-        sock.sendto(probe, (SADP_MULTICAST, SADP_PORT))
-        if debug:
-            print(f"[SADP] Sonda enviada a {SADP_MULTICAST}:{SADP_PORT}")
-    except Exception as e:
-        if debug:
-            print(f"[SADP] Fallo envío multicast: {e}")
+    # Enviar sonda multicast desde CADA interfaz (no solo la default)
+    for ip in iface_ips:
+        try:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF,
+                            socket.inet_aton(ip))
+            sock.sendto(probe, (SADP_MULTICAST, SADP_PORT))
+            if debug:
+                print(f"[SADP] Sonda multicast enviada via {ip}")
+        except Exception as e:
+            if debug:
+                print(f"[SADP] Fallo envío multicast via {ip}: {e}")
 
     # Enviar a direcciones broadcast (redundancia)
     for brd in get_broadcast_addrs():
         try:
             sock.sendto(probe, (brd, SADP_PORT))
             if debug:
-                print(f"[SADP] Sonda enviada a broadcast {brd}:{SADP_PORT}")
+                print(f"[SADP] Sonda broadcast enviada a {brd}:{SADP_PORT}")
         except Exception as e:
             if debug:
                 print(f"[SADP] Fallo broadcast {brd}: {e}")
@@ -305,15 +330,28 @@ def raw_capture(timeout=10):
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    except (AttributeError, OSError):
+        pass
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024 * 1024)
     except Exception:
         pass
-    sock.bind(('', 0))
+
+    # Bind al puerto 37020 para pasar por el firewall
+    try:
+        sock.bind(('', SADP_PORT))
+        print(f"Enlazado al puerto {SADP_PORT}")
+    except OSError:
+        sock.bind(('', 0))
+        port = sock.getsockname()[1]
+        print(f"⚠️  Puerto {SADP_PORT} ocupado, usando {port} (firewall podría bloquear)")
 
     # Join multicast en todas las interfaces
-    for ip in get_interface_ips():
+    iface_ips = get_interface_ips()
+    for ip in iface_ips:
         try:
             mreq = struct.pack("4s4s",
                                socket.inet_aton(SADP_MULTICAST),
@@ -322,9 +360,16 @@ def raw_capture(timeout=10):
         except Exception:
             pass
 
-    # Enviar sonda
+    # Enviar sonda desde cada interfaz
     probe = build_probe()
-    sock.sendto(probe, (SADP_MULTICAST, SADP_PORT))
+    for ip in iface_ips:
+        try:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF,
+                            socket.inet_aton(ip))
+            sock.sendto(probe, (SADP_MULTICAST, SADP_PORT))
+            print(f"Sonda multicast enviada via {ip}")
+        except Exception:
+            pass
     for brd in get_broadcast_addrs():
         try:
             sock.sendto(probe, (brd, SADP_PORT))
