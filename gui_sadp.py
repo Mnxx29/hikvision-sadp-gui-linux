@@ -1219,12 +1219,26 @@ class SADPGui(QMainWindow):
             if not filename:
                 return
 
+            fieldnames = [
+                'ip', 'mac', 'tipo', 'estado', 'puerto', 
+                'http_port', 'serial', 'version', 'subnet', 'gateway', 'dhcp'
+            ]
+
+            rows_to_write = []
+            for disp in self.dispositivos:
+                row = dict(disp)
+                # Traducir el tipo para que sea legible en el CSV
+                tipo_raw = row.get('tipo', '')
+                serial_raw = row.get('serial', '')
+                row['tipo'] = traducir_tipo_dispositivo(tipo_raw, serial_raw)
+                rows_to_write.append(row)
+
             with open(filename, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=['ip', 'mac', 'tipo', 'estado', 'puerto', 'serial', 'version'])
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
                 writer.writeheader()
-                writer.writerows(self.dispositivos)
+                writer.writerows(rows_to_write)
             
-            QMessageBox.information(self, "Éxito", f"Datos exportados exitosamente a:\n'{filename}'")
+            QMessageBox.information(self, "Éxito", f"Datos exportados exitosamente ({len(rows_to_write)} dispositivos) a:\n'{filename}'")
             self.status_label.setText(f"Exportado: {os.path.basename(filename)}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al exportar: {str(e)}")
